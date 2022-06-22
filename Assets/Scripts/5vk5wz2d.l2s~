@@ -1,0 +1,155 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class EndlessWorld : MonoBehaviour
+{
+    const float scale = 1f; //to game Control
+    const float viewerMoveThresholdForChunkUpdate = 25f; // to game Control
+    const float sqrViewerMoveThresholdForChunkUpdate = viewerMoveThresholdForChunkUpdate * viewerMoveThresholdForChunkUpdate;
+    public Transform viewer;
+    public static Vector2 viewerPosition;
+	Vector2 viewerPositionOld;
+	public float chunksViewDst;
+	public Material mapMaterial;
+	static MapGenerator mapGenerator;
+	int chunkSize;
+	int chunksGenDst;
+	int chunksLimits = 15;
+	int currentChunkCoordX;
+	int currentChunkCoordY;
+
+	Vector2 coordHandle = new Vector2(0, 0);
+
+	TerrainChunk chunkHandle;
+	List<TerrainChunk> chunkPool = new List<TerrainChunk>();
+	List<Vector2> chunkCoords = new List<Vector2>();
+	static List<TerrainChunk> terrainChunksLastUpdate = new List<TerrainChunk>();
+
+	private void Start()
+    {
+		mapGenerator = FindObjectOfType<MapGenerator>();
+		viewerPosition = new Vector2(viewer.position.x, viewer.position.z) / scale;
+		chunkSize = MapGenerator.mapChunkSize - 1;
+		viewerPositionOld = new Vector2(viewerPosition.x, viewerPosition.y);
+		chunksGenDst = Mathf.RoundToInt(chunksViewDst / chunkSize);
+		UpdateTerrainChunk();
+		currentChunkCoordX = Mathf.RoundToInt(viewerPosition.x / chunkSize);
+		currentChunkCoordY = Mathf.RoundToInt(viewerPosition.y / chunkSize);
+
+		for (int yOffset = -chunksGenDst; yOffset <= chunksGenDst; yOffset++)
+		{
+			for (int xOffset = -chunksGenDst; xOffset <= chunksGenDst; xOffset++)
+			{
+				Vector2 viewedChunkCoord = new Vector2(currentChunkCoordX + xOffset, currentChunkCoordY + yOffset);
+
+				if (!chunkCoords.Contains(viewedChunkCoord))
+				{
+					chunkCoords.Add(viewedChunkCoord);
+					chunkPool.Add(new TerrainChunk(viewedChunkCoord, chunkSize, transform, mapMaterial));
+				}
+
+			}
+		}
+	}
+
+    private void Update()
+    {
+		viewerPosition.x = viewer.position.x;
+		viewerPosition.y = viewer.position.z;
+		if((viewerPositionOld - viewerPosition).sqrMagnitude > sqrViewerMoveThresholdForChunkUpdate)
+        {
+			viewerPositionOld.x = viewerPosition.x;
+			viewerPositionOld.y = viewerPosition.y;
+			UpdateTerrainChunk();
+
+		}
+	}
+
+	public void UpdateTerrainChunk()
+    {
+		currentChunkCoordX = Mathf.RoundToInt(viewerPosition.x / chunkSize);
+		currentChunkCoordY = Mathf.RoundToInt(viewerPosition.y / chunkSize);
+
+		for (int yOffset = -chunksGenDst; yOffset <= chunksGenDst; yOffset++)
+		{
+			for (int xOffset = -chunksGenDst; xOffset <= chunksGenDst; xOffset++)
+			{
+				Vector2 viewedChunkCoord = new Vector2(currentChunkCoordX + xOffset, currentChunkCoordY + yOffset);
+
+				if (!chunkCoords.Contains(viewedChunkCoord))
+				{
+
+
+					chunkPool.RemoveAt();
+					chunkHandle = new TerrainChunk(viewedChunkCoord, chunkSize, transform, mapMaterial);
+
+					chunkCoords.Add(viewedChunkCoord);
+					
+				}
+
+			}
+		}
+	}
+
+	public class TerrainChunk
+	{
+		Mesh mesh;
+		GameObject meshObject;
+		Vector2 position;
+		Bounds bounds;
+
+		MeshRenderer meshRenderer;
+		MeshFilter meshFilter;
+
+		MapData mapData;
+		bool mapDataReceived;
+		System.Action updateCallback;
+
+		public TerrainChunk(Vector2 coord, int size, Transform parent, Material material)
+		{
+
+			position = coord * size;
+			bounds = new Bounds(position, Vector2.one * size);
+			Vector3 positionV3 = new Vector3(position.x, 0, position.y);
+
+			meshObject = new GameObject("Terrain Chunk");
+			meshRenderer = meshObject.AddComponent<MeshRenderer>();
+			meshFilter = meshObject.AddComponent<MeshFilter>();
+			meshRenderer.material = material;
+			mesh = new Mesh();
+
+			meshObject.transform.position = positionV3 * scale;
+			meshObject.transform.parent = parent;
+			meshObject.transform.localScale = Vector3.one * scale;
+
+			mapGenerator.RequestMapData(position, OnMapDataReceived);
+			
+		}
+
+
+
+		void OnMapDataReceived(MapData mapData)
+		{
+			this.mapData = mapData;
+			Debug.Log(this.mapData.heightMap[1, 1]);
+			Texture2D texture = TextureGenerator.TextureFromColourMap(mapData.colourMap, MapGenerator.mapChunkSize, MapGenerator.mapChunkSize);
+			meshRenderer.material.mainTexture = texture;
+			UpdateTerrainChunk();
+		}
+		void OnMeshDataReceived(MeshData meshData)
+		{
+			mesh = meshData.CreateMesh();
+			meshFilter.mesh = mesh;
+		}
+
+
+		public void UpdateTerrainChunk() {
+
+			mapGenerator.RequestMeshData(mapData, 0, OnMeshDataReceived);
+			meshObject.SetActive(true);
+		}
+
+	}
+
+}
