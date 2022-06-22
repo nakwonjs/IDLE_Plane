@@ -19,5 +19,5 @@ Generate endless terrain based on 'Perlin-noise' and 'Voronoi noise'
 ### Vornoi noise
 <img src="./img/vornoi_noise.png" width="38%" height="38%"/> <img src="./img/vornoi_mesh.png" width="48%" height="48%"/>  
 
-### blend
+### Blend
 <img src="./img/blend_mesh.png" width="48%" height="48%"/>  
